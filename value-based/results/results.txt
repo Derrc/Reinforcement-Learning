@@ -1,17 +1,37 @@
+# TODO: Run more trials (current results based off 1 trial)
+
 Control Hyperparameters:
 - Train on 2000 Episodes
 - Evaluation on 30 Episodes
 - Optimizer = SGD
 - Discount Factor = 0.99
 - Learning Rate = 0.001
-- Seed = 11
+- Train Seed = 11
+- Test Seed = 20
 - Game Solved Score = 195 (mean from last 100 episodes)
+
+SARSA:
+- Using decaying epsilon greedy (1 / episode)
+- Solved after just 659 Episodes
+- Mean after evaluation: 509
+
 
 Q-Learning:
 - Using decaying epsilon greedy (1 / episode)
 - Solved after just 804 Episodes
 - Mean after evaluation: 109
-- Short term memory problem:
+- Problems:
   - samples aren't independent and identically distributed, they are sequential from environment interactions
-  - sees too many of the same samples (especially since model is acting greedily)
-  - forgets old samples (when it reaches these samples again, reward plummets because agent doesn't remember what to do)
+  - sees too many of the same samples (same behavior is reinforced when acting greedily)
+  - network loses ability to generalize and overfits the training environment (seed)
+- Solutions:
+  - experience replay
+  - early stopping
+  - decay learning rate
+
+
+Research More:
+- Off-Policy vs On-Policy Advantages/Disadvantages
+- Overfitting in RL
+  - decaying learning rate (Robbins-Munro sequence)
+- Seed Selections
