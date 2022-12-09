@@ -1,8 +1,13 @@
 # Reinforcement-Learning
 Exploring and implementing different Reinforcement Learning algorithms to better my understanding.
 
-Value-Based, Policy-Based, and Actor-Critic Methods.
+Value-Based, Policy-Based, Actor-Critic Methods, Deterministic Policy Gradient Methods.
 
 # TODO
-1. A3C/A2C implementations
-2. Natural Policy Gradient, TRPO, PPO
+1. SARSA, Q-Learning, DQN
+2. Reinforce, Reinforce with Baseline
+3. Advantage Actor-Critic for TD(0)/TD(lambda)
+4. Natural Policy Gradient, TRPO, PPO
+5. DPG, DDPG, TD3
+6. Soft Actor-Critic
+7. A3C/A2C implementations
