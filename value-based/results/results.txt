@@ -30,8 +30,26 @@ Q-Learning:
   - decay learning rate
 
 
+Deep Q-Learning Using DQN with Experience Replay:
+- Using decaying epsilon greedy -> y = 0.01 + 0.99e^(-x/EPSILON_DECAY)
+- Solved after
+- Mean after evaluation:
+- Problems:
+  - subject to catastrophic forgetting
+  - good explanation here: https://ai.stackexchange.com/questions/23810/why-do-my-rewards-reduce-after-extensive-training-using-d3qn
+
+
+
+
+
 Research More:
 - Off-Policy vs On-Policy Advantages/Disadvantages
 - Overfitting in RL
   - decaying learning rate (Robbins-Munro sequence)
 - Seed Selections
+- Catastrophic Forgetting
+
+
+Papers:
+- Playing Atari with Deep Reinforcement Learning (DQN with Experience Replay)
+  - https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf

@@ -8,6 +8,7 @@ import os
 from sklearn.linear_model import LinearRegression
 
 # Q-Learning (Off-Policy TD Control)
+# Using function approximation not table
 
 # Episodes
 EPISODES = 2000
@@ -17,8 +18,8 @@ MAX_STEPS = 1000
 GAMMA = 0.99
 # Learning Rate
 LR = 1e-3
-# Epsilon (e-greedy policy)
-EPSILON = 0.5
+# Epsilon Deca
+EPSILON_DECAY = 200 # around 37.4% by episode 200
 # Seed
 SEED = 11
 # Solved Score
@@ -46,7 +47,7 @@ class QNet(nn.Module):
         return x
 
     def get_action(self, actions, episode):
-        epsilon = 1 / (episode + 1)
+        epsilon = 0.01 + 0.99 * np.exp(-1 * episode / EPSILON_DECAY)
         if np.random.rand() < epsilon:
             return np.random.choice(len(actions))
         
