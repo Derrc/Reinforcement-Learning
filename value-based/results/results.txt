@@ -1,39 +1,43 @@
 # TODO: Run more trials (current results based off 1 trial)
 
 Control Hyperparameters:
+- 5 Trials
 - Train on 2000 Episodes
 - Evaluation on 30 Episodes
 - Optimizer = SGD
 - Discount Factor = 0.99
 - Learning Rate = 0.001
-- Train Seed = 11
-- Test Seed = 20
+- Epsilon Decay = 500
+- Training Seed = 11
 - Game Solved Score = 195 (mean from last 100 episodes)
 
-SARSA:
-- Using decaying epsilon greedy (1 / episode)
-- Solved after just 659 Episodes
-- Mean after evaluation: 509
 
+Experiments over 5 Trials:
+- Using decaying epsilon greedy -> y = 0.01 + 0.99e^(-x/EPSILON_DECAY)
+  - better convergence and data distribution when allowing more exploration
+
+SARSA:
+- Mean Solved Episode over Trials: 1190.2
+- Mean Reward over Trials: 76.0
+- Mean Q-Value over Trials: 0.904
 
 Q-Learning:
-- Using decaying epsilon greedy (1 / episode)
-- Solved after just 804 Episodes
-- Mean after evaluation: 109
+- Mean Reward over Trials: 62.0
+- Mean Q-Value over Trials: 0.565
+- Mean Solved Episode over Trials: 1344.6
 - Problems:
   - samples aren't independent and identically distributed, they are sequential from environment interactions
   - sees too many of the same samples (same behavior is reinforced when acting greedily)
-  - network loses ability to generalize and overfits the training environment (seed)
+  - network loses ability to generalize and overfits the training environment
 - Solutions:
   - experience replay
   - early stopping
   - decay learning rate
 
-
 Deep Q-Learning Using DQN with Experience Replay:
-- Using decaying epsilon greedy -> y = 0.01 + 0.99e^(-x/EPSILON_DECAY)
-- Solved after
-- Mean after evaluation:
+- Never solved
+- Mean Reward over Trials: 52.0
+- Mean Q-Value over Trials: 2.8735880851745605
 - Problems:
   - subject to catastrophic forgetting
   - good explanation here: https://ai.stackexchange.com/questions/23810/why-do-my-rewards-reduce-after-extensive-training-using-d3qn

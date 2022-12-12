@@ -8,11 +8,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from sklearn.linear_model import LinearRegression
+from utils import get_evaluation_states, get_average_q_value, run_trials
 
 # Deep Q-Learning Using DQN with Experience Replay
 
 # Episodes
-EPISODES = 1000
+EPISODES = 2000
 # Max Steps per Episode
 MAX_STEPS = 1000
 # Mini-Batch Size for Experience Replay
@@ -24,7 +25,7 @@ GAMMA = 0.99
 # Learning Rate
 LR = 1e-3
 # Epsilon Decay -> Higher number decays slower y = 0.01 + 0.99e^(-x/EPSILON_DECAY)
-EPSILON_DECAY = 200 # around 37.4% by episode 200
+EPSILON_DECAY = 400 # around 37.4% by episode 400
 # Seed
 SEED = 11
 # Solved Score
@@ -99,66 +100,18 @@ def train_off_experience(model, buffer, criterion, optim):
     optim.step()
 
 
-# run a random policy through environment to collect states to calculate average Q-Values
-def get_evaluation_states():
-    evaluation_states = []
-
-    for _ in range(5):
-        state = env.reset(seed=SEED)[0]
-        for _ in range(1000):
-            evaluation_states.append(state)
-            action = env.action_space.sample()
-
-            next_s, r, done, _, _ = env.step(action)
-
-            state = next_s
-
-            if done:
-                break
-    
-    return evaluation_states
-
-
-# compute the average Q-Value of states as an evaluation metric
-def get_average_q_value(model, states):
-    with torch.no_grad():
-        q_values = model(np.array(states))
-    return torch.mean(q_values)
-
-
-# plot mean reward as well as mean q-values over episodes
-def plot_results(total_rewards, total_q_values):
-    plt.plot(total_rewards)
-    plt.xlabel('Episodes')
-    plt.ylabel('Reward')
-    plt.title('Deep Q-Learning on CartPole')
-    plt.xlim(right=2000)
-    plt.ylim(top=500)
-    reg = LinearRegression().fit(
-        np.reshape(np.arange(len(total_rewards)), (-1, 1)),
-        np.reshape(total_rewards, (-1, 1))
-    )
-    plt.plot(reg.predict(np.reshape(np.arange(len(total_rewards)), (-1, 1))))
-    plt.show()
-
-    plt.plot(total_q_values)
-    plt.xlabel('Episodes')
-    plt.ylabel('Q-Value')
-    plt.title('Deep Q-Learning Average Q-Value on CartPole')
-    plt.show()
-
-
-
 def train():
     model = DQN(state_dim, action_dim)
-    optim = torch.optim.Adam(model.parameters(), lr=LR)
+    optim = torch.optim.SGD(model.parameters(), lr=LR)
     criterion = torch.nn.MSELoss()
     buffer = ReplayBuffer(max_length=BUFFER_SIZE)
     model.train()
 
-    evaluation_states = get_evaluation_states()
+    # keep track of q-values in evaluation states
+    evaluation_states = get_evaluation_states(env, 5)
     total_rewards = []
     total_q_values = []
+    solved_episode = 0
     for episode in range(EPISODES):
         state = env.reset(seed=SEED)[0]
         rewards = []
@@ -188,44 +141,15 @@ def train():
         if episode % 100 == 0:
             print(f'EPISODE: {episode}, MEAN: {mean}')
         if mean > 195:
+            solved_episode = episode
             print(f'Game Solved at Episode {episode}')
             break
     
-    # plot results
-    plot_results(total_rewards, total_q_values)
-
     torch.save(model.state_dict(), PATH)
 
-def eval():
-    model = DQN(state_dim, action_dim)
-    model.eval()
-
-    if os.path.exists(PATH):
-        model.load_state_dict(torch.load(PATH))
-
-    eval_episodes = 30
-    eval_steps = 10000
-    total_rewards = []
-    for episode in range(eval_episodes):
-        state = env.reset(seed=SEED)[0]
-        rewards = []
-        for _ in range(eval_steps):
-            actions = model(state)
-            action = np.argmax(actions.detach().numpy())
-
-            next_s, r, done, _, _ = env.step(action)
-
-            state = next_s
-            rewards.append(r)
-            if done:
-                break
-        
-        total_rewards.append(np.sum(rewards))
-        print(f'EPISODE: {episode}, REWARD: {np.sum(rewards)}')
-
-    print(f'MEAN: {np.mean(total_rewards)}')
-    
+    # return totals
+    return total_rewards, total_q_values, solved_episode
 
 
 if __name__ == '__main__':
-    train()
+    run_trials(5, train, 'Deep Q-Learning')

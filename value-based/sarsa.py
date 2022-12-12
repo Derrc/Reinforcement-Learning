@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from sklearn.linear_model import LinearRegression
+from utils import get_evaluation_states, get_average_q_value, run_trials
 
 # SARSA (On-Policy TD Control)
 
@@ -17,9 +18,9 @@ MAX_STEPS = 1000
 GAMMA = 0.99
 # Learning Rate
 LR = 1e-3
-# Epsilon (e-greedy policy)
-EPSILON = 0.5
-# Seed
+# Epsilon Decay
+EPSILON_DECAY = 400 # around 37.4% by episode 400
+# Seeding
 SEED = 11
 # Solved Score
 SOLVED_SCORE = 195
@@ -46,7 +47,7 @@ class SARSA(nn.Module):
         return x
 
     def get_action(self, actions, episode):
-        epsilon = 1 / (episode + 1)
+        epsilon = 0.01 + 0.99 * np.exp(-1 * episode / EPSILON_DECAY)
         if np.random.rand() < epsilon:
             return np.random.choice(len(actions))
         
@@ -60,7 +61,11 @@ def train():
     criterion = torch.nn.MSELoss()
     model.train()
 
+    # keep track of q-values in evaluation states
+    evaluation_states = get_evaluation_states(env, 5)
     total_rewards = []
+    total_q_values = []
+    solved_episode = 0
     for episode in range(EPISODES):
         state = env.reset(seed=SEED)[0]
         rewards = []
@@ -94,60 +99,20 @@ def train():
                 break
 
         total_rewards.append(np.sum(rewards))
+        total_q_values.append(get_average_q_value(model, evaluation_states))
         mean = np.mean(total_rewards[-100:])
         if episode % 100 == 0:
             print(f'EPISODE: {episode}, MEAN: {mean}')
         if mean > 195:
+            solved_episode = episode
             print(f'Game Solved at Episode {episode}')
             break
     
-    # plot results
-    plt.plot(total_rewards)
-    plt.xlabel('Episodes')
-    plt.ylabel('Reward')
-    plt.title('SARSA on CartPole')
-    plt.xlim(right=2000)
-    plt.ylim(top=500)
-    reg = LinearRegression().fit(
-        np.reshape(np.arange(len(total_rewards)), (-1, 1)),
-        np.reshape(total_rewards, (-1, 1))
-    )
-    plt.plot(reg.predict(np.reshape(np.arange(len(total_rewards)), (-1, 1))))
-    plt.show()
-
+    # save model
     torch.save(model.state_dict(), PATH)
 
-def eval():
-    model = SARSA(state_dim, action_dim)
-    model.eval()
-
-    if os.path.exists(PATH):
-        model.load_state_dict(torch.load(PATH))
-
-    eval_episodes = 30
-    eval_steps = 10000
-    total_rewards = []
-    for episode in range(eval_episodes):
-        state = env.reset(seed=SEED)[0]
-        rewards = []
-        for _ in range(eval_steps):
-            actions = model(state)
-            action = np.argmax(actions.detach().numpy())
-
-            next_s, r, done, _, _ = env.step(action)
-
-            state = next_s
-            rewards.append(r)
-            if done:
-                break
-        
-        total_rewards.append(np.sum(rewards))
-        print(f'EPISODE: {episode}, REWARD: {np.sum(rewards)}')
-
-    print(f'MEAN: {np.mean(total_rewards)}')
-    
+    return total_rewards, total_q_values, solved_episode
 
 
 if __name__ == '__main__':
-    train()
-    eval()
+    run_trials(5, train, 'SARSA')
