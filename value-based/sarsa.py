@@ -53,6 +53,12 @@ class SARSA(nn.Module):
         
         return np.argmax(actions.detach().numpy())
 
+    # input state -> get action sampled from current policy and q_value
+    def act(self, state, episode):
+        q_values = self.forward(state)
+        action = self.get_action(q_values, episode)
+        return action, q_values[action]
+
 
 
 def train():
@@ -71,8 +77,8 @@ def train():
         rewards = []
         # run trajectory through episode
         for _ in range(MAX_STEPS):
-            actions = model(state)
-            action = model.get_action(actions, episode)
+            # get action sampled from policy and q_value
+            action, q_value = model.act(state, episode)
 
             next_s, r, done, _, _ = env.step(action)
 
@@ -80,13 +86,8 @@ def train():
             state = next_s
 
             # update network parameters
-            next_actions = model(next_s)
-            # get next action sampled from policy
-            next_action = model.get_action(next_actions, episode)
-            # get q value for current action
-            q_value = actions[action]
-            # get q value for next action
-            next_q_value = next_actions[next_action]
+            # get next q_value sampled from policy
+            next_q_value = model.act(next_s, episode)[1]
             td_target = r + GAMMA * next_q_value
 
             optim.zero_grad()

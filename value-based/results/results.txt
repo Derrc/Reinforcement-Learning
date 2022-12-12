@@ -1,4 +1,4 @@
-# TODO: Run more trials (current results based off 1 trial)
+# TODO: Run trials over more complex environments
 
 Control Hyperparameters:
 - 5 Trials
@@ -34,13 +34,33 @@ Q-Learning:
   - early stopping
   - decay learning rate
 
+
 Deep Q-Learning Using DQN with Experience Replay:
 - Never solved
 - Mean Reward over Trials: 52.0
-- Mean Q-Value over Trials: 2.8735880851745605
+- Mean Q-Value over Trials: 2.873
 - Problems:
+  - unstable learning
+  - overestimation of q-values
   - subject to catastrophic forgetting
   - good explanation here: https://ai.stackexchange.com/questions/23810/why-do-my-rewards-reduce-after-extensive-training-using-d3qn
+  - add target network
+
+
+Deep Q-Learning Using DQN with Experience Replay and Target Network:
+- Mean Reward over Trials: 151.4
+- Mean Q-Value over Trials: 44.189
+- Mean Solved Episode over Trials: 459.4
+- Performed dramatically better over other algorithms and just using experience replay
+- Problems:
+  - still could be overestimating q-values
+
+
+
+Double DQN:
+- proposed to solve overestimation of q-values
+
+
 
 
 

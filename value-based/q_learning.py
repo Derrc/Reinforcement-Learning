@@ -32,7 +32,7 @@ env = gym.make('CartPole-v1', render_mode='rgb_array')
 state_dim = env.observation_space.shape[0]
 action_dim = env.action_space.n
 
-# State-Action Value Network
+# Deep Q Network
 class QNet(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
@@ -54,6 +54,12 @@ class QNet(nn.Module):
         
         return np.argmax(actions.detach().numpy())
 
+    # input state -> get action sampled from current policy and q_value
+    def act(self, state, episode):
+        q_values = self.forward(state)
+        action = self.get_action(q_values, episode)
+        return action, q_values[action]
+
 
 
 def train():
@@ -72,8 +78,7 @@ def train():
         rewards = []
         # run trajectory through episode
         for _ in range(MAX_STEPS):
-            actions = model(state)
-            action = model.get_action(actions, episode)
+            action, q_value = model.act(state, episode)
 
             next_s, r, done, _, _ = env.step(action)
 
@@ -83,7 +88,6 @@ def train():
             # update network parameters
             next_actions = model(next_s)
             td_target = r + GAMMA * torch.max(next_actions)
-            q_value = actions[action]
 
             optim.zero_grad()
             # MSE of TD-error

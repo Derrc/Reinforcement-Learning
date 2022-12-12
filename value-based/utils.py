@@ -35,13 +35,13 @@ def get_average_q_value(model, states):
 
 
 # plot mean reward as well as mean q-values over episodes
-def plot_results(total_rewards, total_q_values, model):
+def plot_results(total_rewards, total_q_values, model, xlim, ylim):
     plt.plot(total_rewards)
     plt.xlabel('Episodes')
     plt.ylabel('Reward')
     plt.title(f'{model} on CartPole')
-    plt.xlim(right=2000)
-    plt.ylim(top=500)
+    plt.xlim(right=xlim)
+    plt.ylim(top=ylim)
     reg = LinearRegression().fit(
         np.reshape(np.arange(len(total_rewards)), (-1, 1)),
         np.reshape(total_rewards, (-1, 1))
@@ -68,7 +68,7 @@ def run_trials(trials, train, title):
         q_values.append(np.mean(total_q_values))
 
         if i == trials-1:
-            plot_results(total_rewards, total_q_values, title)
+            plot_results(total_rewards, total_q_values, title, 2000, 500)
     
     print(f'Mean Reward over Trials: {np.mean(rewards)}')
     print(f'Mean Q-Value over Trials: {np.mean(q_values)}')

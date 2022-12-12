@@ -10,10 +10,10 @@ import os
 from sklearn.linear_model import LinearRegression
 from utils import get_evaluation_states, get_average_q_value, run_trials
 
-# Deep Q-Learning Using DQN with Experience Replay
+# Deep Q-Learning Using DQN with Experience Replay and Target Network
 
 # Episodes
-EPISODES = 2000
+EPISODES = 1000
 # Max Steps per Episode
 MAX_STEPS = 1000
 # Mini-Batch Size for Experience Replay
@@ -37,7 +37,7 @@ env = gym.make('CartPole-v1', render_mode='rgb_array')
 state_dim = env.observation_space.shape[0]
 action_dim = env.action_space.n
 
-# State-Action Value Network
+# Deep Q Network
 class DQN(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
@@ -59,6 +59,13 @@ class DQN(nn.Module):
         
         return np.argmax(actions.detach().numpy())
 
+    # input state -> get action sampled from current policy and q_value
+    def act(self, state, episode):
+        q_values = self.forward(state)
+        action = self.get_action(q_values, episode)
+        return action, q_values[action]
+
+
 # experience replay buffer
 class ReplayBuffer():
     def __init__(self, max_length):
@@ -78,18 +85,18 @@ class ReplayBuffer():
         return len(self.buffer)
 
 # train from mini-batch of experiences
-def train_off_experience(model, buffer, criterion, optim):
+def train_off_experience(network, target_network, buffer, criterion, optim):
     state, action, reward, next_state, done = buffer.sample(BATCH_SIZE)
     action = torch.tensor(action, dtype=torch.long)
     reward = torch.tensor(reward, dtype=torch.float32)
     done = torch.tensor(done, dtype=torch.long)
 
     # get q values of actions taken
-    q_values = model(state)
+    q_values = network(state)
     q_value_from_action = torch.gather(q_values, 1, action.unsqueeze(1)).squeeze(1)
 
-    # get best next q values: max(q_values)
-    next_q_values = model(next_state)
+    # get best next q values: max(q_values) from target network
+    next_q_values = target_network(next_state)
     next_q_value_from_action = torch.max(next_q_values, 1)[0]
 
     # compute loss and update parameters
@@ -101,11 +108,13 @@ def train_off_experience(model, buffer, criterion, optim):
 
 
 def train():
-    model = DQN(state_dim, action_dim)
-    optim = torch.optim.SGD(model.parameters(), lr=LR)
+    network = DQN(state_dim, action_dim)
+    # target network used to keep learning stable
+    target_network = DQN(state_dim, action_dim)
+    optim = torch.optim.SGD(network.parameters(), lr=LR)
     criterion = torch.nn.MSELoss()
     buffer = ReplayBuffer(max_length=BUFFER_SIZE)
-    model.train()
+    network.train()
 
     # keep track of q-values in evaluation states
     evaluation_states = get_evaluation_states(env, 5)
@@ -117,8 +126,7 @@ def train():
         rewards = []
         # run trajectory through episode
         for _ in range(MAX_STEPS):
-            actions = model(state)
-            action = model.get_action(actions, episode)
+            action = network.act(state, episode)[0]
 
             next_s, r, done, _, _ = env.step(action)
 
@@ -127,7 +135,7 @@ def train():
 
             # sample from replay buffer if len(buffer) > BATCH_SIZE
             if len(buffer) > BATCH_SIZE:
-                train_off_experience(model, buffer, criterion, optim)
+                train_off_experience(network, target_network, buffer, criterion, optim)
 
             rewards.append(r)
             state = next_s
@@ -135,8 +143,11 @@ def train():
             if done:
                 break
 
+        # update target network every episode
+        target_network.load_state_dict(network.state_dict())
+
         total_rewards.append(np.sum(rewards))
-        total_q_values.append(get_average_q_value(model, evaluation_states))
+        total_q_values.append(get_average_q_value(network, evaluation_states))
         mean = np.mean(total_rewards[-100:])
         if episode % 100 == 0:
             print(f'EPISODE: {episode}, MEAN: {mean}')
@@ -145,7 +156,7 @@ def train():
             print(f'Game Solved at Episode {episode}')
             break
     
-    torch.save(model.state_dict(), PATH)
+    torch.save(network.state_dict(), PATH)
 
     # return totals
     return total_rewards, total_q_values, solved_episode
