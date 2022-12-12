@@ -82,8 +82,6 @@ def eval(env, model, PATH, eval_episodes, eval_steps):
     if os.path.exists(PATH):
         model.load_state_dict(torch.load(PATH))
 
-    eval_episodes = 30
-    eval_steps = 10000
     total_rewards = []
     for episode in range(eval_episodes):
         state = env.reset()[0]
