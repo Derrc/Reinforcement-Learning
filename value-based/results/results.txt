@@ -51,7 +51,7 @@ Deep Q-Learning Using DQN with Experience Replay and Target Network:
 - Mean Reward over Trials: 151.4
 - Mean Q-Value over Trials: 44.189
 - Mean Solved Episode over Trials: 459.4
-- Performed dramatically better over other algorithms and just using experience replay
+- Performed dramatically better over other algorithms and over dqn just using experience replay
 - Problems:
   - still could be overestimating q-values
 
