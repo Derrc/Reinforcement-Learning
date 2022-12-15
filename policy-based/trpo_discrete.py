@@ -7,17 +7,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-# Trust-Region Policy Optimization
+# Trust-Region Policy Optimization (Currently for discrete state spaces)
 # (Using Actor-Critic Network to estimate Advantages)
 
-# Number of episodes
-EPISODES = 1000
+# Number of rollouts per iteration
+ROLLOUTS = 10
 # Max steps per episode
 MAX_STEPS = 1000
 # Discount factor
 GAMMA = 0.99
 # Delta
-DELTA = 0.0001 # constraint value used from TRPO paper
+DELTA = 0.01 # constraint value used from TRPO paper
 # Learning rate
 ACTOR_LR = 1e-3
 CRITIC_LR = 1e-3
@@ -33,7 +33,7 @@ state_dim = env.observation_space.shape[0]
 action_dim = env.action_space.n
 
 # rollout tuple
-Rollout = namedtuple('Rollout', ['state', 'action', 'next_state', 'action_prob', 'advantage'])
+Rollout = namedtuple('Rollout', ['state', 'action', 'reward', 'next_state', 'action_prob'])
 
 # Critic Network: S-> Value(S)
 class Critic(nn.Module):
@@ -47,7 +47,6 @@ class Critic(nn.Module):
         )
 
     def forward(self, x):
-        x = torch.from_numpy(x)
         x = self.layers(x)
         return x.squeeze(0)
 
@@ -65,7 +64,6 @@ class Actor(nn.Module):
     
     # outputs action, log prob of action
     def forward(self, x):
-        x = torch.from_numpy(x)
         x = self.layers(x)
         actions = F.softmax(x, dim=1)
         return actions
@@ -76,7 +74,7 @@ class Actor(nn.Module):
 
     # assuming not batched input state
     def act(self, state):
-        state = np.expand_dims(state, 0)
+        state = torch.from_numpy(np.expand_dims(state, 0))
         actions = self.forward(state).squeeze(0)
         action = self.get_action(actions)
         action_prob = actions[action]
@@ -84,38 +82,41 @@ class Actor(nn.Module):
 
 
 # rollout -> run trajectories gain experience from current policy
-# TODO: implement GAE to estimate advantages, current implementation is naive and clunky
-def rollout(actor, critic, steps=1000):
+# TODO: implement GAE to estimate advantages, make rollout for continuous state space
+def rollout(actor, num_rollouts=ROLLOUTS, max_steps=MAX_STEPS):
     rollouts = []
-    rewards, episode_rewards = [], []
-    state = env.reset()[0]
-    I = 1
-    for _ in range(steps):
-        action, action_prob = actor.act(state)
+    rollout_rewards = []
+    for _ in range(num_rollouts):
+        samples = []
+        state = env.reset()[0]
+        for _ in range(max_steps):
+            action, action_prob = actor.act(state)
 
-        next_s, r, done, _, _ = env.step(action)
+            next_s, r, done, _, _ = env.step(action)
 
-        advantage = r + (1-done) * GAMMA * critic(next_s) - critic(state)
-        advantage *= I
+            samples.append((state, action, r, next_s, action_prob))
+            state = next_s
+
+            if done:
+                break
         
-        rollouts.append(Rollout(state, action, next_s, action_prob, advantage))
-        rewards.append(r)
+        # append rollout
+        states, actions, rewards, next_states, action_probs = zip(*samples)
+        states = torch.stack([torch.from_numpy(state) for state in states])
+        next_states = torch.stack([torch.from_numpy(state) for state in next_states])
+        actions = torch.tensor(actions).unsqueeze(1)
+        action_probs = torch.tensor(action_probs).unsqueeze(1)
+        rewards = torch.tensor(rewards).unsqueeze(1)
 
-        state = next_s
-        I *= GAMMA
-        if done:
-            episode_rewards.append(np.sum(rewards))
-            rewards = []
-            state = env.reset()[0]
-            I = 1
+        rollouts.append(Rollout(states, actions, rewards, next_states, action_probs))
+        rollout_rewards.append(torch.sum(rewards))
 
-    return rollouts, episode_rewards
+    return rollouts, rollout_rewards
         
 
 # surrogate loss -> L(theta): policy gradient of objective function
 # grad(L(theta)) = policy gradient(g)
 def surrogate_loss(advantages, new_policy, old_policy):
-    advantages.detach()
     return (new_policy / old_policy * advantages).mean()
 
 
@@ -129,32 +130,35 @@ def flat_grad(x, parameters, retain_graph=False, create_graph=False):
     grad_flatten = []
     for grad in grads:
         grad_flatten.append(grad.view(-1))
-    return torch.cat(grad_flatten)
+    grad_flatten = torch.cat(grad_flatten)
+    return grad_flatten
 
+# estimate advantages over each episode
+def estimate_advantages(critic, states, last_state, rewards):
+    values = critic(states)
+    last_value = critic(last_state.unsqueeze(0))
+    next_values = torch.zeros_like(rewards)
+
+    for i in reversed(range(rewards.shape[0])):
+        last_value = next_values[i] = rewards[i] + 0.99 * last_value
+
+    advantages = next_values - values
+    return advantages
 
 
 # compute KL-Divergence
-def kl_divergence(new_policy, old_policy):
-    new_policy.detach()
-    return (new_policy * (new_policy.log() - old_policy.log())).sum()
-
-
-# compute Fisher-Information Matrix vector product for use in conujugate gradient method
-# F = 2nd grad of KL
-def fisher_vector_product(d_kl, b, parameters):
-    b.detach()
-    fisher = flat_grad(d_kl @ b, parameters, retain_graph=True)
-    return fisher
-
+def kl_divergence(old_dist, new_dist):
+    old_dist = old_dist.detach()
+    return (old_dist * (old_dist.log() - new_dist.log())).sum(-1).mean()
 
 # conjugate gradient method
-def conjugate_gradient(d_kl, b, parameters, nsteps, residual_tol=1e-10):
+def conjugate_gradient(Fvp, b, nsteps, residual_tol=1e-10):
     x = torch.zeros(b.size())
     r = b.clone()
     p = b.clone()
     rdotr = torch.dot(r, r)
     for _ in range(nsteps):
-        _Avp = fisher_vector_product(d_kl, p, parameters)
+        _Avp = Fvp(p)
         # step size in current direction
         alpha = rdotr / torch.dot(p, _Avp)
         # next point
@@ -197,14 +201,16 @@ def train(iterations):
     critic = Critic(state_dim)
     critc_optim = torch.optim.Adam(critic.parameters(), lr=1e-3)
 
-    for _ in range(iterations):
+    for iter in range(iterations):
         # rollout with current policy
-        rollouts, rewards = rollout(actor, critic, steps=500)
-        states = np.array([r.state for r in rollouts])
-        actions = torch.tensor([r.action for r in rollouts])
-        old_policy = torch.stack([r.action_prob for r in rollouts])
-        advantages = torch.stack([r.advantage for r in rollouts])
+        rollouts, rollout_rewards = rollout(actor, num_rollouts=ROLLOUTS, max_steps=MAX_STEPS)
+        states = torch.cat([r.state for r in rollouts])
+        actions = torch.cat([r.action for r in rollouts]).flatten()
+        old_policy = torch.cat([r.action_prob for r in rollouts]).flatten()
 
+        # estimate advantages
+        advantages = [estimate_advantages(critic, state, next_state[-1], reward) for state, _, reward, next_state, _ in rollouts]
+        advantages = torch.cat(advantages, dim=0).flatten()
         # normalize advantages
         advantages = (advantages - advantages.mean()) / advantages.std()
 
@@ -213,30 +219,59 @@ def train(iterations):
 
         parameters = list(actor.parameters())
 
-        # compute surrogate loss
+        # compute surrogate loss, taking different distributions for KL Div
         new_probs = actor(states)
         new_policy = torch.gather(new_probs, 1, actions.unsqueeze(1)).squeeze(1)
-        loss = surrogate_loss(advantages, new_policy, new_policy.detach())
+        loss = surrogate_loss(advantages, new_policy, old_policy.detach())
+        
         # compute policy gradient for surrogate objective function
         g = flat_grad(loss, parameters, retain_graph=True)
 
-        # compute kl divergence and grad of kl
-        kl = kl_divergence(new_policy, old_policy)
-        d_kl = flat_grad(kl, parameters, create_graph=True)
+        def fisher_vector_product(v):
+            kl = kl_divergence(new_probs, new_probs)
+            kl_grad = flat_grad(kl, parameters, create_graph=True)
+
+            kl_v = kl_grad.dot(v)
+            kl_v_grad = flat_grad(kl_v, parameters, retain_graph=True).detach()
+
+            return kl_v_grad + 0.1 * v
+
+
 
         # compute conjugate gradient and max step size
-        search_dir = conjugate_gradient(d_kl, g, parameters, nsteps=10) # 10 taken from TRPO paper
-        step_size = torch.sqrt(2 * DELTA / (search_dir @ fisher_vector_product(d_kl, search_dir, parameters)))
+        search_dir = conjugate_gradient(fisher_vector_product, g, nsteps=10) # 10 taken from TRPO paper
+        step_size = torch.sqrt(2 * DELTA / (search_dir @ fisher_vector_product(search_dir)))
         max_step = step_size * search_dir
-        # update_actor(actor, max_step)
 
         # Line search to increase update size but still remain in trust region
+        # TODO: implement own line search
+        old_policy = new_policy
+        old_probs = new_probs
+        def criterion(step):
+            update_actor(actor, step)
+            with torch.no_grad():
+                new_probs = actor(states)
+                new_policy = torch.gather(new_probs, 1, actions.unsqueeze(1)).squeeze(1)
 
-        print(f'Reward: {np.mean(rewards)}')
+                new_loss = surrogate_loss(advantages, new_policy, old_policy.detach())
+                new_kl = kl_divergence(old_probs, new_probs)
+                
+            loss_improve = new_loss - loss
 
+            if loss_improve > 0 and new_kl <= DELTA:
+                return True
+
+            update_actor(actor, -step)
+            return False
+
+        i = 0
+        while not criterion((0.9 ** i) * max_step) and i < 10:
+            i += 1
+
+
+        print(f'{iter}: Reward: {np.mean(rollout_rewards):.3f}')
         
 
-
 if __name__ == '__main__':
-    train(5)
+    train(50)
     
