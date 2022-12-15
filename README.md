@@ -11,3 +11,7 @@ Value-Based, Policy-Based, Actor-Critic Methods, Deterministic Policy Gradient M
 5. DPG, DDPG, TD3
 6. Soft Actor-Critic
 7. A3C/A2C implementations
+
+# Papers Implemented
+1. [Playing Atari with Deep Reinforcement Learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
+2. [Trust Region Policy Optimization](https://arxiv.org/pdf/1502.05477.pdf)
