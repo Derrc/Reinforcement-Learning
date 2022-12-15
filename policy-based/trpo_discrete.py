@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-# Trust-Region Policy Optimization (Currently for discrete state spaces)
+# Trust-Region Policy Optimization (Currently for discrete action spaces)
 # (Using Actor-Critic Network to estimate Advantages)
 
 # Number of rollouts per iteration
