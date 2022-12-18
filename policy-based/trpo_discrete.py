@@ -130,8 +130,7 @@ def flat_grad(x, parameters, retain_graph=False, create_graph=False):
     grad_flatten = []
     for grad in grads:
         grad_flatten.append(grad.view(-1))
-    grad_flatten = torch.cat(grad_flatten)
-    return grad_flatten
+    return torch.cat(grad_flatten)
 
 # estimate advantages over each episode
 def estimate_advantages(critic, states, last_state, rewards):
@@ -140,7 +139,7 @@ def estimate_advantages(critic, states, last_state, rewards):
     next_values = torch.zeros_like(rewards)
 
     for i in reversed(range(rewards.shape[0])):
-        last_value = next_values[i] = rewards[i] + 0.99 * last_value
+        last_value = next_values[i] = rewards[i] + GAMMA * last_value
 
     advantages = next_values - values
     return advantages
