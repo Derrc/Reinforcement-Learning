@@ -8,7 +8,7 @@ Code Refactoring
 1. ~~SARSA~~, SARSA(λ), ~~Q-Learning~~, ~~DQN~~, Double DQN
 2. ~~REINFORCE~~, ~~REINFORCE with Baseline~~
 3. ~~Advantage Actor-Critic for TD(0)/TD(λ)~~
-4. Natural Policy Gradient, ~~TRPO~~, ~~PPO~~
+4. TNPG, ~~TRPO~~, ~~PPO~~
 5. DPG, DDPG, TD3
 6. Soft Actor-Critic
 7. A3C/A2C implementations
