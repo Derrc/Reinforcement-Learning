@@ -1,0 +1,58 @@
+from collections import namedtuple
+import torch
+import torch.nn as nn
+import numpy as np
+
+Rollout = namedtuple('Rollout', ['state', 'action', 'log_prob', 'reward', 'next_state'])
+
+# rollout -> run trajectories gain experience from current policy
+# TODO: implement GAE to estimate advantages
+def rollout(env, actor, num_rollouts, max_steps):
+    rollouts = []
+    rollout_rewards = []
+    for _ in range(num_rollouts):
+        samples = []
+        state = env.reset()[0]
+        for _ in range(max_steps):
+            action, log_prob = actor.get_action(state)
+
+            next_s, r, done, _, _ = env.step(action)
+
+            samples.append((state, action, log_prob, r, next_s))
+            state = next_s
+
+            if done:
+                break
+        
+        # append rollout
+        states, actions, log_probs, rewards, next_states = zip(*samples)
+        states = torch.stack([torch.from_numpy(state) for state in states])
+        next_states = torch.stack([torch.from_numpy(state) for state in next_states])
+        actions = torch.tensor(actions).unsqueeze(1)
+        log_probs = torch.tensor(log_probs).unsqueeze(1)
+        rewards = torch.tensor(rewards).unsqueeze(1)
+
+        rollouts.append(Rollout(states, actions, log_probs, rewards, next_states))
+        rollout_rewards.append(torch.sum(rewards))
+
+    return rollouts, rollout_rewards
+
+ 
+# estimate advantages over each episode
+def estimate_advantages(critic, states, last_state, rewards, gamma):
+    values = critic(states)
+    last_value = critic(last_state.unsqueeze(0))
+    next_values = torch.zeros_like(rewards)
+
+    for i in reversed(range(rewards.shape[0])):
+        last_value = next_values[i] = rewards[i] + gamma * last_value
+
+    return next_values - values
+
+# compute rewards-to-go
+def get_cumulative_rewards(rewards, gamma):
+    cr = [rewards[-1]]
+    for i in range(len(rewards)-2, -1, -1):
+        cr.append(rewards[i] + gamma * cr[-1])
+    cr.reverse()
+    return torch.tensor(cr)
