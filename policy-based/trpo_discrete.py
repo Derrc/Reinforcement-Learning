@@ -19,13 +19,12 @@ GAMMA = 0.99
 # Delta
 DELTA = 0.01 # constraint value used from TRPO paper
 # Learning rate
-ACTOR_LR = 1e-3
 CRITIC_LR = 1e-3
 # Solved if average over 195
 SOLVED_SCORE = 195
 # model paths
-PATH_ACTOR = './models/td0_actor.pth'
-PATH_CRITIC = './models/td0_critic.pth'
+PATH_ACTOR = './models/trpo_actor.pth'
+PATH_CRITIC = './models/trpo_critic.pth'
 
 # env
 env = gym.make('CartPole-v1', render_mode='rgb_array')
@@ -141,8 +140,7 @@ def estimate_advantages(critic, states, last_state, rewards):
     for i in reversed(range(rewards.shape[0])):
         last_value = next_values[i] = rewards[i] + GAMMA * last_value
 
-    advantages = next_values - values
-    return advantages
+    return next_values - values
 
 
 # compute KL-Divergence
@@ -198,7 +196,7 @@ def update_actor(actor, max_step):
 def train(iterations):
     actor = Actor(state_dim, action_dim)
     critic = Critic(state_dim)
-    critc_optim = torch.optim.Adam(critic.parameters(), lr=1e-3)
+    critc_optim = torch.optim.Adam(critic.parameters(), lr=CRITIC_LR)
 
     for iter in range(iterations):
         # rollout with current policy
@@ -226,11 +224,13 @@ def train(iterations):
         # compute policy gradient for surrogate objective function
         g = flat_grad(loss, parameters, retain_graph=True)
 
+        # compute fisher vector product (Fisher Information Matrix * v)
         def fisher_vector_product(v):
             kl = kl_divergence(new_probs, new_probs)
             kl_grad = flat_grad(kl, parameters, create_graph=True)
 
             kl_v = kl_grad.dot(v)
+            # FIM = 2nd grad of kl
             kl_v_grad = flat_grad(kl_v, parameters, retain_graph=True).detach()
 
             return kl_v_grad + 0.1 * v

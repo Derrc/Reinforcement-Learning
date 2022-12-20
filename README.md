@@ -4,6 +4,7 @@ Exploring and implementing different Reinforcement Learning algorithms to better
 Value-Based, Policy-Based, Actor-Critic Methods, Deterministic Policy Gradient Methods.
 
 # TODO
+Code Refactoring
 1. ~~SARSA~~, SARSA(λ), ~~Q-Learning~~, ~~DQN~~, Double DQN
 2. ~~REINFORCE~~, ~~REINFORCE with Baseline~~
 3. ~~Advantage Actor-Critic for TD(0)/TD(λ)~~
