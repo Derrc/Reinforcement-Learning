@@ -3,21 +3,23 @@ import torch.nn as nn
 from torch.distributions import Categorical
 import numpy as np
 from models import Critic, Actor
-from utils import estimate_advantages, get_cumulative_rewards, rollout, flat_grad, kl_divergence, conjugate_gradient
+from utils import estimate_advantages, get_cumulative_rewards, rollout, flat_grad, kl_divergence, conjugate_gradient, gae, gae2
 import gymnasium as gym
 
 # Agents for Different Algorithms 
 # TODO: add plotting/Adaptive KL Penalty/TRPO continuous action space
 
 # PPO Agent (clipped surrogate function)
+# TODO: value clipping, adding entropy regularization
 class PPOAgent():
-    def __init__(self, env, obs_dim, action_dim, continuous, batch_size=16, discount_factor=0.99, actor_lr=1e-3, critic_lr=1e-3, delta=0.2, 
-                train_epochs=50, optim_steps=10, max_steps=1000, action_low=-1, action_high=1):
+    def __init__(self, env, obs_dim, action_dim, continuous, batch_size=16, discount_factor=0.99, actor_lr=1e-3, critic_lr=1e-3, delta=0.2,
+                lamda=0.95, train_epochs=50, optim_steps=10, max_steps=1000, action_low=-1, action_high=1):
         # Set hyperparameters
         self.env = env
         self.batch_size = batch_size
         self.discount_factor = discount_factor
         self.delta = delta
+        self.lamda = lamda
         self.train_epochs = train_epochs
         self.optim_steps = optim_steps
         self.max_steps = max_steps
@@ -32,6 +34,10 @@ class PPOAgent():
         # initialize optimizers
         self.actor_optim = torch.optim.Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optim = torch.optim.Adam(self.critic.parameters(), lr=critic_lr)
+
+        # model paths
+        self.actor_path = 'ppo_actor.pth'
+        self.critic_path = 'ppo_critic.pth'
 
     def clipped_surrogate_loss(self, new_policy, old_policy, advantages):
         # compute ratio from log probs of actions
@@ -51,7 +57,7 @@ class PPOAgent():
             target_log_probs = torch.cat([r.log_prob for r in rollouts]).flatten()
 
             # compute advantages and normalize
-            advantages = [estimate_advantages(self.critic, state, next_state[-1], reward, self.discount_factor) for state, _, _, reward, next_state in rollouts]
+            advantages = [gae(self.critic(state), self.critic(next_state), reward, self.discount_factor, self.lamda) for state, _, _, reward, next_state in rollouts]
             advantages = torch.cat(advantages).flatten().detach()
             advantages = (advantages - advantages.mean()) / advantages.std()
 
@@ -78,6 +84,21 @@ class PPOAgent():
                 self.actor_optim.step()
 
             print(f'Rewards: {np.mean(rollout_rewards):.3f}')
+    
+    # load models
+    def load(self):
+        self.actor.load_state_dict(torch.load(self.actor_path))
+        self.critic.load_state_dict(torch.load(self.critic_path))
+
+    # save models
+    def save(self):
+        torch.save(self.actor.state_dict(), self.actor_path)
+        torch.save(self.critic.state_dict(), self.critic_path)
+
+    # plot: reward, entropy
+    def plot(self):
+        pass
+
 
 # TRPO Agent: currently only supports discrete action spaces
 class TRPOAgent():
@@ -199,7 +220,8 @@ if __name__ == '__main__':
     discrete_env = gym.make('CartPole-v1', render_mode='rgb_array')
     discrete_state_dim = discrete_env.observation_space.shape[0]
     discrete_action_dim = discrete_env.action_space.n
-    agent = TRPOAgent(discrete_env, discrete_state_dim, discrete_action_dim)
+    agent = PPOAgent(discrete_env, discrete_state_dim, discrete_action_dim, continuous=False, max_steps=1000)
+    # agent = TRPOAgent(discrete_env, discrete_state_dim, discrete_action_dim)
     agent.train()
     
     cont_env = gym.make('MountainCarContinuous-v0', render_mode='rgb_array')
@@ -207,5 +229,6 @@ if __name__ == '__main__':
     cont_action_dim = cont_env.action_space.shape[0]
     agent = PPOAgent(cont_env, cont_state_dim, cont_action_dim, continuous=True, max_steps=128)
     # agent.train()
+
 
         

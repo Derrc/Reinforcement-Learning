@@ -44,16 +44,39 @@ def estimate_advantages(critic, states, last_state, rewards, gamma):
     last_value = critic(last_state.unsqueeze(0))
     next_values = torch.zeros_like(rewards)
 
-    for i in reversed(range(rewards.shape[0])):
+    for i in reversed(range(len(rewards))):
         last_value = next_values[i] = rewards[i] + gamma * last_value
 
     return next_values - values
 
 
+# generalized advantage estimate
+def gae(state_values, next_state_values, rewards, gamma, lamda):
+    advantages = torch.zeros(len(rewards) + 1)
+
+    for i in reversed(range(len(rewards))):
+        delta = rewards[i] + gamma * next_state_values[i] - state_values[i]
+        advantages[i] = delta + (gamma * lamda * advantages[i+1])
+
+    return advantages[:len(rewards)]
+
+
+# another implementation of gae using the fact that intermediate value function estimates cancel out
+def gae2(critic, first_state, last_state, rewards, gamma, lamda):
+    first_state = critic(first_state)
+    last_state = critic(last_state)
+    advantages = torch.zeros(len(rewards))
+    advantages[-1] = last_state
+
+    for i in reversed(range(len(rewards)-1)):
+        advantages[i] = rewards[i] + gamma * lamda * advantages[i+1]
+
+    return advantages
+
 # compute rewards-to-go
 def get_cumulative_rewards(rewards, gamma):
     cr = [rewards[-1]]
-    for i in range(len(rewards)-2, -1, -1):
+    for i in reversed(range(1, len(rewards))):
         cr.append(rewards[i] + gamma * cr[-1])
     cr.reverse()
     return torch.tensor(cr)
