@@ -71,7 +71,7 @@ def gae2(critic, first_state, last_state, rewards, gamma, lamda):
     for i in reversed(range(len(rewards)-1)):
         advantages[i] = rewards[i] + gamma * lamda * advantages[i+1]
 
-    return advantages
+    return advantages - first_state
 
 # compute rewards-to-go
 def get_cumulative_rewards(rewards, gamma):

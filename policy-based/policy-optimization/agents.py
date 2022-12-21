@@ -3,16 +3,16 @@ import torch.nn as nn
 from torch.distributions import Categorical
 import numpy as np
 from models import Critic, Actor
-from utils import estimate_advantages, get_cumulative_rewards, rollout, flat_grad, kl_divergence, conjugate_gradient, gae, gae2
+from utils import estimate_advantages, rollout, flat_grad, kl_divergence, conjugate_gradient, gae
 import gymnasium as gym
 
 # Agents for Different Algorithms 
 # TODO: add plotting/Adaptive KL Penalty/TRPO continuous action space
 
 # PPO Agent (clipped surrogate function)
-# TODO: value clipping, adding entropy regularization
+# TODO: https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/
 class PPOAgent():
-    def __init__(self, env, obs_dim, action_dim, continuous, batch_size=16, discount_factor=0.99, actor_lr=1e-3, critic_lr=1e-3, delta=0.2,
+    def __init__(self, env, obs_dim, action_dim, continuous, batch_size=32, discount_factor=0.99, actor_lr=1e-4, critic_lr=1e-4, delta=0.2,
                 lamda=0.95, train_epochs=50, optim_steps=10, max_steps=1000, action_low=-1, action_high=1):
         # Set hyperparameters
         self.env = env
@@ -57,13 +57,14 @@ class PPOAgent():
             target_log_probs = torch.cat([r.log_prob for r in rollouts]).flatten()
 
             # compute advantages and normalize
-            advantages = [gae(self.critic(state), self.critic(next_state), reward, self.discount_factor, self.lamda) for state, _, _, reward, next_state in rollouts]
-            advantages = torch.cat(advantages).flatten().detach()
-            advantages = (advantages - advantages.mean()) / advantages.std()
+            with torch.no_grad():
+                advantages = [gae(self.critic(state), self.critic(next_state), reward, self.discount_factor, self.lamda) for state, _, _, reward, next_state in rollouts]
+                advantages = torch.cat(advantages).flatten()
+                # compute target return to fit critic = advantages + values
+                target_return = self.critic(states) + advantages
+                advantages = (advantages - advantages.mean()) / advantages.std()
 
-            # compute cumulative rewards
-            cumulative_rewards = torch.cat([get_cumulative_rewards(r.reward, self.discount_factor) for r in rollouts])
-
+            # optimize lower bound
             for _ in range(self.optim_steps):
                 # get values of states with critic
                 values = self.critic(states).squeeze(1)
@@ -72,7 +73,7 @@ class PPOAgent():
 
                 # update critic network
                 self.critic_optim.zero_grad()
-                critic_loss = (values - cumulative_rewards).pow(2).mean()
+                critic_loss = (values - target_return).pow(2).mean()
                 critic_loss.backward()
                 self.critic_optim.step()
 
@@ -179,7 +180,6 @@ class TRPOAgent():
                 return kl_v_grad + 0.1 * v
 
 
-
             # compute conjugate gradient and max step size
             search_dir = conjugate_gradient(fisher_vector_product, g, nsteps=10) # 10 taken from TRPO paper
             step_size = torch.sqrt(2 * self.delta / (torch.dot(search_dir, fisher_vector_product(search_dir))))
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     discrete_env = gym.make('CartPole-v1', render_mode='rgb_array')
     discrete_state_dim = discrete_env.observation_space.shape[0]
     discrete_action_dim = discrete_env.action_space.n
-    agent = PPOAgent(discrete_env, discrete_state_dim, discrete_action_dim, continuous=False, max_steps=1000)
+    agent = PPOAgent(discrete_env, discrete_state_dim, discrete_action_dim, train_epochs=1000, continuous=False, max_steps=1000)
     # agent = TRPOAgent(discrete_env, discrete_state_dim, discrete_action_dim)
     agent.train()
     
