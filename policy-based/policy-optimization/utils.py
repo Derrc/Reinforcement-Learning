@@ -49,6 +49,7 @@ def estimate_advantages(critic, states, last_state, rewards, gamma):
 
     return next_values - values
 
+
 # compute rewards-to-go
 def get_cumulative_rewards(rewards, gamma):
     cr = [rewards[-1]]
@@ -56,3 +57,45 @@ def get_cumulative_rewards(rewards, gamma):
         cr.append(rewards[i] + gamma * cr[-1])
     cr.reverse()
     return torch.tensor(cr)
+
+
+# compute gradient and flatten
+def flat_grad(x, parameters, retain_graph=False, create_graph=False):
+    if create_graph:
+        retain_graph = True
+    
+    grads = torch.autograd.grad(x, parameters, retain_graph=retain_graph, create_graph=create_graph)
+    grad_flatten = []
+    for grad in grads:
+        grad_flatten.append(grad.view(-1))
+    return torch.cat(grad_flatten)
+
+
+# compute KL-Divergence between two probability distributions (arrays)
+def kl_divergence(old_dist, new_dist):
+    return (old_dist * (old_dist.log() - new_dist.log())).mean()
+
+
+# conjugate gradient method
+def conjugate_gradient(Fvp, b, nsteps, residual_tol=1e-10):
+    x = torch.zeros(b.size())
+    r = b.clone()
+    p = b.clone()
+    rdotr = torch.dot(r, r)
+    for _ in range(nsteps):
+        _Avp = Fvp(p)
+        # step size in current direction
+        alpha = rdotr / torch.dot(p, _Avp)
+        # next point
+        x += alpha * p
+        # remaining error from optimal point
+        r -= alpha * _Avp
+        new_rdotr = torch.dot(r, r)
+        beta = new_rdotr / rdotr
+        # new direction
+        p = r + beta * p
+        rdotr = new_rdotr
+        # if error is low -> close to optimal point -> break
+        if rdotr < residual_tol:
+            break
+    return x

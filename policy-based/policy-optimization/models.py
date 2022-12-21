@@ -22,7 +22,7 @@ class Critic(nn.Module):
 
 # Policy Network: pi(a|s)
 class Actor(nn.Module):
-    def __init__(self, state_dim, action_dim, action_low=-1, action_high=1, continuous=False):
+    def __init__(self, state_dim, action_dim, continuous, action_low=-1, action_high=1):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(state_dim, 128),
