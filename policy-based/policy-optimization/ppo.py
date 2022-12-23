@@ -176,7 +176,7 @@ def train(env_name, current_update, continuous):
                 nn.utils.clip_grad_norm_(agent.actor.parameters(), agent.max_grad_norm)
                 agent.actor_optim.step()
 
-                # plotting
+                # for plotting
                 total_rewards.append(np.sum(rewards.cpu().numpy()) / episodes)
 
 

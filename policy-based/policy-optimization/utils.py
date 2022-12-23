@@ -14,7 +14,7 @@ def rollout(env, actor, num_rollouts, max_steps):
         samples = []
         state = env.reset(seed=11)[0]
         for _ in range(max_steps):
-            action, log_prob = actor.get_action(state)
+            action, log_prob = actor.get_action(torch.from_numpy(state))
 
             next_s, r, done, _, _ = env.step(action)
 
