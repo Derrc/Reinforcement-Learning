@@ -2,17 +2,17 @@ from collections import namedtuple
 import torch
 import torch.nn as nn
 import numpy as np
+import matplotlib.pyplot as plt
 
 Rollout = namedtuple('Rollout', ['state', 'action', 'log_prob', 'reward', 'next_state'])
 
 # rollout -> run trajectories gain experience from current policy
-# TODO: implement GAE to estimate advantages
 def rollout(env, actor, num_rollouts, max_steps):
     rollouts = []
     rollout_rewards = []
     for _ in range(num_rollouts):
         samples = []
-        state = env.reset()[0]
+        state = env.reset(seed=11)[0]
         for _ in range(max_steps):
             action, log_prob = actor.get_action(state)
 
@@ -50,28 +50,17 @@ def estimate_advantages(critic, states, last_state, rewards, gamma):
     return next_values - values
 
 
-# generalized advantage estimate
-def gae(state_values, next_state_values, rewards, gamma, lamda):
+def gae(values, next_values, rewards, dones, discount, gae_param):
     advantages = torch.zeros(len(rewards) + 1)
 
-    for i in reversed(range(len(rewards))):
-        delta = rewards[i] + gamma * next_state_values[i] - state_values[i]
-        advantages[i] = delta + (gamma * lamda * advantages[i+1])
-
-    return advantages[:len(rewards)]
-
-
-# another implementation of gae using the fact that intermediate value function estimates cancel out
-def gae2(critic, first_state, last_state, rewards, gamma, lamda):
-    first_state = critic(first_state)
-    last_state = critic(last_state)
-    advantages = torch.zeros(len(rewards))
-    advantages[-1] = last_state
-
     for i in reversed(range(len(rewards)-1)):
-        advantages[i] = rewards[i] + gamma * lamda * advantages[i+1]
+        nonterminal = 1 - dones[i]
+        delta = rewards[i] + discount * next_values[i] - values[i]
+        advantages[i] = delta + (nonterminal * discount * gae_param * advantages[i+1])
 
-    return advantages - first_state
+    advantages = advantages[:len(rewards)]
+    return advantages
+
 
 # compute rewards-to-go
 def get_cumulative_rewards(rewards, gamma):

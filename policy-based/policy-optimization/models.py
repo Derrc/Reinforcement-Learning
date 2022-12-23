@@ -57,7 +57,6 @@ class Actor(nn.Module):
         return log_prob
 
     def get_action(self,state):
-        state = torch.from_numpy(state)
         if self.continuous:
             mu, std = self.forward(state)
             dist =  Normal(mu, std)
