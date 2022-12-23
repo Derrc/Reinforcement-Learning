@@ -17,3 +17,4 @@ Code Refactoring
 1. [Playing Atari with Deep Reinforcement Learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
 2. [Trust Region Policy Optimization](https://arxiv.org/pdf/1502.05477.pdf)
 3. [Proximal Policy Optimization](https://arxiv.org/pdf/1707.06347.pdf)
+4. [Generalized Advantage Estimation](https://arxiv.org/pdf/1506.02438.pdf)
