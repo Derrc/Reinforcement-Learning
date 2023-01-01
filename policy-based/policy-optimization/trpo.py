@@ -7,7 +7,7 @@ from utils import estimate_advantages, rollout, flat_grad, kl_divergence, conjug
 import gymnasium as gym
 
 # Trust Region Policy Optimization (TRPO)
-# TODO: refactor and recode (messy)
+# TODO: refactor (messy) and add for continuous action space
 
 class TRPOAgent():
     def __init__(self, env_name, **hyperparameters):
@@ -110,12 +110,12 @@ class TRPOAgent():
             step_size = torch.sqrt(2 * self.delta / (torch.dot(search_dir, fisher_vector_product(search_dir))))
             max_step = step_size * search_dir
 
-            # Line search to increase update size but still remain in trust region
-            # TODO: implement own line search
+            # Line search to decrease update size until within trust region if initial step is large
             old_policy = new_policy
             old_probs = new_probs
-            def criterion(step):
-                self.update_actor(step)
+            for i in range(10):
+                proposed_step = (0.9 ** i) * max_step
+                self.update_actor(proposed_step)
                 with torch.no_grad():
                     new_probs = self.actor(states)
                     dist = Categorical(new_probs)
@@ -126,16 +126,11 @@ class TRPOAgent():
                     
                 loss_improve = new_loss - loss
 
-                if loss_improve > 0 and new_kl <= self.delta:
-                    return True
+                if loss_improve >= 0 and new_kl <= self.delta:
+                    break
 
-                self.update_actor(-step)
-                return False
-
-            i = 0
-            while not criterion((0.9 ** i) * max_step) and i < 10:
-                i += 1
-
+                self.update_actor(-proposed_step)
+            
 
             print(f'{epoch}: Reward: {np.mean(rollout_rewards):.3f}')
 
