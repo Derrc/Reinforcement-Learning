@@ -53,11 +53,14 @@ class Actor(nn.Module):
 
         return mu, std
 
-    def get_action(self, state):
+    def get_action(self, state, exploit=False):
         mu, std = self.forward(state)
         # sample noise from zero-mean Gaussian
         dist, noise = Normal(mu, std), Normal(0, 1)
-        action = torch.clamp(dist.rsample() + noise.sample(), self.action_low, self.action_high)
+        if exploit:
+            action = torch.clamp(dist.sample(), self.action_low, self.action_high)
+        else:
+            action = torch.clamp(dist.rsample() + noise.sample(), self.action_low, self.action_high)
         
         return action
 
@@ -97,9 +100,9 @@ class ReplayBuffer():
 
 
 class DDPGAgent():
-    def __init__(self, env_name, seed):
+    def __init__(self, env_name, seed, render_mode='rgb_array'):
         # initialize env
-        self.env = gym.make(env_name)
+        self.env = gym.make(env_name, render_mode=render_mode)
         obs_dim = self.env.observation_space.shape[0]
         action_dim = self.env.action_space.shape[0]
         self.action_low = torch.from_numpy(self.env.action_space.low)
@@ -233,18 +236,25 @@ def train(agent):
         agent.save()
 
         # early stop for Pendulum-v1
-        if np.mean(total_rewards[-100:]) > -150:
+        if np.mean(total_rewards[-100:]) > -300:
             break
         
 
+def eval(agent):
+    state = agent.env.reset()[0]
+    reward = []
+    for _ in range(1000):
+        action = agent.actor.get_action(torch.from_numpy(state), exploit=True)
 
+        next_s, r, terminated, truncated, info = agent.env.step(action.detach().numpy())
 
+        state = next_s
+        reward.append(r)
+        if terminated or truncated:
+            state = agent.env.reset()[0]
+            print(f'Reward: {np.sum(reward)}')
+            reward = []
 
-
-
-
-
-        
 
 
 
@@ -253,8 +263,9 @@ def train(agent):
 
 if __name__ == '__main__':
     env_name = 'Pendulum-v1'
-    agent = DDPGAgent(env_name, seed=10)
-    train(agent)
+    agent = DDPGAgent(env_name, seed=10, render_mode='human')
+    # train(agent)
+    eval(agent)
 
 
 
