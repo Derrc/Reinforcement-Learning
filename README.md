@@ -1,7 +1,7 @@
 # Reinforcement-Learning
 Exploring and implementing different Reinforcement Learning algorithms to better my understanding.
 
-Value-Based, Policy-Based and Policy-Optization Methods, and Actor-Critic Methods
+Value-Based, Policy-Based and Policy-Optimization Methods, and Actor-Critic Methods
 
 # TODO
 Code Refactoring
