@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 # Number of steps to train over
 TOTAL_STEPS = 200000
 # Number of steps to explore (sample from uniform random distribution)
-EXPLORE_STEPS = 1000
+EXPLORE_STEPS = 5000
 # Steps per rollouts
 BATCH_SIZE = 1024
 # Mini-Batch size
@@ -93,7 +93,7 @@ class ReplayBuffer():
     def sample(self, batch_size):
         experiences = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, done = zip(*experiences)
-        return np.concatenate(states), actions, rewards, np.concatenate(next_states), done
+        return np.concatenate(states), np.array(actions), np.array(rewards), np.concatenate(next_states), np.array(done)
 
     def __len__(self):
         return len(self.buffer)
@@ -143,51 +143,57 @@ class DDPGAgent():
         torch.save(self.critic.state_dict(), critic_path)
     
     def update_actor(self, qvalues):
-        self.actor_optim.zero_grad()
         loss = -qvalues.mean()
+        self.actor_optim.zero_grad()
         loss.backward(retain_graph=True)
         self.actor_optim.step()
 
     def update_critic(self, qvalues, targets):
-        self.critic_optim.zero_grad()
         loss = (qvalues - targets).pow(2).mean()
+        self.critic_optim.zero_grad()
         loss.backward()
         self.critic_optim.step()
 
     # soft-update for target networks
     def soft_update(self):
-        actor_param = list(self.actor.parameters())
-        critic_param = list(self.critic.parameters())
-        for i, p in enumerate(self.target_actor.parameters()):
-            p = (1 - POLYAK) * p + POLYAK * actor_param[i]
-        for i, p in enumerate(self.target_critic.parameters()):
-            p = (1 - POLYAK) * p + POLYAK * critic_param[i]
+        with torch.no_grad():
+            actor_param = list(self.actor.parameters())
+            critic_param = list(self.critic.parameters())
+            for i, p in enumerate(self.target_actor.parameters()):
+                updated_p = (1 - POLYAK) * p + POLYAK * actor_param[i]
+                p.copy_(updated_p)
+            for i, p in enumerate(self.target_critic.parameters()):
+                updated_p = (1 - POLYAK) * p + POLYAK * critic_param[i]
+                p.copy_(updated_p)
 
 
-def plot(rewards, global_step):
-    plt.plot(rewards)
-    plt.title(f'Rewards at Step {global_step}')
+def plot(mean_rewards, episode_rewards, global_step):
+    plt.plot(mean_rewards)
+    plt.title(f'Mean Rewards at Step {global_step}')
     plt.xlabel('Step')
     plt.ylabel('Reward')
     plt.savefig('./results/DDPG_Pendulum')
+
+    # plot episode rewards
+    # plt.plot(episode_rewards)
     
 
 def learn(agent, buffer):
     s, a, r, next_s, done = buffer.sample(MINI_SIZE)
     s = torch.tensor(s)
-    a = torch.tensor(a).unsqueeze(1)
+    a = torch.tensor(a)
     r = torch.tensor(r).unsqueeze(1)
     next_s = torch.tensor(next_s)
-    done = torch.tensor(done)
+    done = torch.tensor(done).unsqueeze(1)
 
-    next_a = agent.actor.get_action(next_s)
+    target_a = agent.target_actor.get_action(next_s)
+    target_qvalues = agent.target_critic(next_s, target_a).detach()
+
+    targets = r + GAMMA * (1 - done) * target_qvalues
     qvalues = agent.critic(s, a)
-    next_qvalues = agent.critic(next_s, next_a).detach()
-
-    targets = r + GAMMA * (1 - done) * next_qvalues
 
     agent.update_critic(qvalues, targets)
-    agent.update_actor(agent.critic(next_s, next_a))
+    agent.update_actor(agent.critic(s, agent.actor.get_action(s)))
 
     agent.soft_update()
 
@@ -202,41 +208,45 @@ def train(agent):
     global_step = 0
     num_updates = TOTAL_STEPS // BATCH_SIZE
     state = agent.env.reset()[0]
-    total_rewards = []
+    total_mean_rewards = []
+    episode_rewards = []
     for update in range(num_updates):
-        episode_rewards = []
+        rewards = []
         for step in range(BATCH_SIZE):
             global_step += 1
 
-            if global_step <= EXPLORE_STEPS:
-                action = Uniform(agent.action_low, agent.action_high).rsample()
-            else:
-                action = agent.actor.get_action(torch.from_numpy(state))
+            with torch.no_grad():
+                if global_step <= EXPLORE_STEPS:
+                    action = Uniform(agent.action_low, agent.action_high).rsample()
+                else:
+                    action = agent.actor.get_action(torch.from_numpy(state))
 
-            next_s, reward, terminated, truncated, info = agent.env.step(action.detach().numpy())
+            next_s, reward, terminated, truncated, info = agent.env.step(action)
             done = np.logical_or(terminated, truncated).astype(int)
 
-            buffer.push(state, action, reward, next_s, done)
+            buffer.push(state, action.numpy(), reward.numpy(), next_s, done)
 
             # sample from buffer and train if enough samples
             if len(buffer) > BATCH_SIZE:
                 learn(agent, buffer)
 
             state = next_s
-            episode_rewards.append(reward)
+            rewards.append(reward)
             if done:
                 state = agent.env.reset()[0]
-                total_rewards.append(np.sum(episode_rewards))
-                episode_rewards = []
+                episode_rewards.append(np.sum(rewards))
+                rewards = []
 
         # plotting
-        print(f'Step: {global_step} Reward: {np.mean(total_rewards[-100:]):.3f}')
-        plot(total_rewards, global_step)
+        mean_reward = np.mean(episode_rewards[-100:])
+        total_mean_rewards.append(mean_reward)
+        print(f'Step: {global_step} Reward: {mean_reward:.3f}')
+        plot(total_mean_rewards, episode_rewards, global_step)
 
         agent.save()
 
         # early stop for Pendulum-v1
-        if np.mean(total_rewards[-100:]) > -300:
+        if mean_reward > -200:
             break
         
 
@@ -254,9 +264,6 @@ def eval(agent):
             state = agent.env.reset()[0]
             print(f'Reward: {np.sum(reward)}')
             reward = []
-
-
-
 
 
 
