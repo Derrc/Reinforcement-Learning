@@ -58,7 +58,7 @@ class Actor(nn.Module):
         # sample noise from zero-mean Gaussian
         dist, noise = Normal(mu, std), Normal(0, 1)
         if exploit:
-            action = torch.clamp(dist.sample(), self.action_low, self.action_high)
+            action = torch.clamp(dist.rsample(), self.action_low, self.action_high)
         else:
             action = torch.clamp(dist.rsample() + noise.sample(), self.action_low, self.action_high)
         
@@ -170,12 +170,18 @@ class DDPGAgent():
 def plot(mean_rewards, episode_rewards, global_step):
     plt.plot(mean_rewards)
     plt.title(f'Mean Rewards at Step {global_step}')
-    plt.xlabel('Step')
+    plt.xlabel('Update')
     plt.ylabel('Reward')
-    plt.savefig('./results/DDPG_Pendulum')
+    plt.savefig('./results/DDPG_Pendulum_Mean')
+    plt.clf()
 
     # plot episode rewards
-    # plt.plot(episode_rewards)
+    plt.plot(episode_rewards)
+    plt.title(f'Episode Rewards at Step {global_step}')
+    plt.xlabel('Episode')
+    plt.ylabel('Reward')
+    plt.savefig('./results/DDPG_Pendulum_Episode')
+    plt.clf()
     
 
 def learn(agent, buffer):
@@ -186,14 +192,14 @@ def learn(agent, buffer):
     next_s = torch.tensor(next_s)
     done = torch.tensor(done).unsqueeze(1)
 
-    target_a = agent.target_actor.get_action(next_s)
+    target_a = agent.target_actor.get_action(next_s, exploit=True)
     target_qvalues = agent.target_critic(next_s, target_a).detach()
 
     targets = r + GAMMA * (1 - done) * target_qvalues
     qvalues = agent.critic(s, a)
 
     agent.update_critic(qvalues, targets)
-    agent.update_actor(agent.critic(s, agent.actor.get_action(s)))
+    agent.update_actor(agent.critic(s, agent.actor.get_action(s, exploit=True)))
 
     agent.soft_update()
 
@@ -246,7 +252,7 @@ def train(agent):
         agent.save()
 
         # early stop for Pendulum-v1
-        if mean_reward > -200:
+        if mean_reward > -150:
             break
         
 
