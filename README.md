@@ -10,7 +10,7 @@ Code Refactoring
 3. ~~Advantage Actor-Critic for TD(0)/TD(λ)~~
 4. A2C/A3C
 5. ~~TRPO~~, ~~PPO~~
-6. ~~DDPG~~, TD3, SAC
+6. ~~DDPG~~, ~~TD3~~, SAC
 
 # Papers Implemented
 1. [Playing Atari with Deep Reinforcement Learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
@@ -18,3 +18,4 @@ Code Refactoring
 3. [Proximal Policy Optimization](https://arxiv.org/pdf/1707.06347.pdf)
 4. [Generalized Advantage Estimation](https://arxiv.org/pdf/1506.02438.pdf)
 5. [Continuous Control with Deep Reinforcement Learning](https://arxiv.org/pdf/1509.02971.pdf) (DDPG)
+6. [Addressing Function Approximation Error in Actor-Critic Methods](https://arxiv.org/pdf/1802.09477.pdf) (TD3)
