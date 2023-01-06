@@ -15,7 +15,9 @@ import matplotlib.pyplot as plt
 # Number of steps to train over
 TOTAL_STEPS = 200000
 # Number of steps to explore (sample from uniform random distribution)
-EXPLORE_STEPS = 5000
+EXPLORE_STEPS = 10000
+# std for exploration noise
+EXPLORE_STD = 0.5
 # Steps per rollouts
 BATCH_SIZE = 1024
 # Mini-Batch size
@@ -25,7 +27,7 @@ BUFFER_SIZE = 50000
 # Discount factor
 GAMMA = 0.99
 # Polyak constant for updating target networks
-POLYAK = 0.001
+POLYAK = 0.005
 # Learning rate
 ACTOR_LR = 1e-3
 CRITIC_LR = 1e-3
@@ -56,7 +58,7 @@ class Actor(nn.Module):
     def get_action(self, state, exploit=False):
         mu, std = self.forward(state)
         # sample noise from zero-mean Gaussian
-        dist, noise = Normal(mu, std), Normal(0, 1)
+        dist, noise = Normal(mu, std), Normal(0, EXPLORE_STD)
         if exploit:
             action = torch.clamp(dist.rsample(), self.action_low, self.action_high)
         else:
@@ -276,7 +278,7 @@ def eval(agent):
 
 if __name__ == '__main__':
     env_name = 'Pendulum-v1'
-    agent = DDPGAgent(env_name, seed=10, render_mode='human')
+    agent = DDPGAgent(env_name, seed=10)
     # train(agent)
     eval(agent)
 
