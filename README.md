@@ -1,5 +1,5 @@
 # Reinforcement-Learning
-Exploring and implementing different Reinforcement Learning algorithms to better my understanding.
+Exploring and implementing different Reinforcement Learning algorithms to better my understanding, particulary model-free control methods.
 
 Value-Based, Policy-Based and Policy-Optimization Methods, and Actor-Critic Methods
 
